@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String           @id @default(cuid())
+  firstName         String
+  lastName          String
+  email             String           @unique
+  companyName       String
+  phoneNumber       String
+  jobTitle          String?
+  primaryContact    Boolean
+  role              UserRole
+  hostid            String?
+  attendeeCompanyId String?
+  emailVerified     DateTime?
+  image             String?
+  accounts          Account[]
+  attendeeAdmin     AttendeeCompany? @relation("AttendeeAdmin")
+  hostAdmin         Host?            @relation("HostAdmin")
+  sessions          Session[]
+  attendeeCompany   AttendeeCompany? @relation("attendeeCompany", fields: [attendeeCompanyId], references: [id])
+  host              Host?            @relation("host", fields: [hostid], references: [id])
+  hashedPassword    String?
+  passwordSet       Boolean          @default(false)
+  resetToken        String?          @unique
+  resetTokenExpiry  DateTime?
+}
+
+model Host {
+  id                 String    @id @default(cuid())
+  companyName        String    @unique
+  phoneNumber        String
+  assignedSuite      String
+  url                String?
+  serviceOfferings   Json?
+  serviceDescription String?
+  specialOfferings   String?
+  adminId            String?   @unique
+  logo               String?
+  // New Point of Contact fields
+  pocFirstName       String?
+  pocLastName        String?
+  pocEmail           String?
+  pocPhoneNumber     String?
+  admin              User?     @relation("HostAdmin", fields: [adminId], references: [id])
+  meetings           Meeting[]
+  users              User[]    @relation("host")
+  suiteSchedule      Json?
+}
+
+model AttendeeCompany {
+  id                 String    @id @default(cuid())
+  companyName        String    @unique
+  phoneNumber        String
+  url                String?
+  logo               String?
+  needsDescription   String?
+  numberOfEmployees  Int       @default(1)
+  numberOfLocations  Int       @default(1)
+  readyForAssessment Int       @default(5)
+  maxMatches         Int       @default(6)
+  schedulePrefs      Json?
+  selectedHosts      String[]  @default([])
+  deletedHosts       String[]  @default([])
+  adminId            String    @unique
+  admin              User      @relation("AttendeeAdmin", fields: [adminId], references: [id])
+  users              User[]    @relation("attendeeCompany")
+  Meeting            Meeting[]
+}
+
+model Meeting {
+  id            String           @id @default(cuid())
+  date          String
+  time          String
+  code          String?
+  assignedSuite String?
+  walkIn        Boolean?
+  hostId        String
+  attendeeId    String?
+  guests        Guest[]
+  boothAssigned String[] // ids of users assigned to booth
+  verified      Boolean?         @default(false)
+  attendee      AttendeeCompany? @relation(fields: [attendeeId], references: [id])
+  userId        String?
+  host          Host             @relation(fields: [hostId], references: [id])
+
+  @@unique([hostId, date, time]) // Ensure a host can only have one entry per date and time slot
+}
+
+model Guest {
+  id          String  @id @default(cuid())
+  firstName   String
+  lastName    String
+  email       String
+  companyName String
+  meetingId   String
+  meeting     Meeting @relation(fields: [meetingId], references: [id])
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Schedule {
+  id        String @id @default(uuid()) // Automatically generate a unique ID
+  eventId   String @unique // Unique identifier based on the hashed date
+  date      String
+  time      String
+  session   String
+  sortIndex Int
+
+  @@map("schedules")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+enum UserRole {
+  HOST_ADMIN
+  HOST_TEAM_MEMBER
+  ATTENDEE
+  ATTENDEE_ADMIN
+  ADMIN
+}
+
+enum MeetingStatus {
+  REQUESTED
+  ACCEPTED
+  REJECTED
+}
